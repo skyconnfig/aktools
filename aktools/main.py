@@ -20,11 +20,15 @@ from fastapi.responses import FileResponse
 from aktools.core.api import app_core, templates
 from aktools.datasets import get_favicon_path, get_homepage_html
 from aktools.login import app_user_login
-from aktools.utils import get_latest_version
+from aktools.utils import get_latest_version, disable_http_proxies
 from aktools.schema.version import VersionBase
 
 favicon_path = get_favicon_path(file="favicon.ico")
 html_path = get_homepage_html(file="homepage.html")
+
+
+# 在模块加载时禁用代理，确保通过 uvicorn 加载时也生效
+disable_http_proxies()
 
 
 app = FastAPI(
@@ -93,4 +97,6 @@ app.include_router(app_core, prefix="/api", tags=["数据接口"])
 app.include_router(app_user_login, prefix="/auth", tags=["登录接口"])
 
 if __name__ == "__main__":
+    # 应用启动前禁用代理，避免第三方数据源访问失败
+    disable_http_proxies()
     uvicorn.run(app="main:app", host="127.0.0.1", port=8080)

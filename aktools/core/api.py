@@ -11,6 +11,7 @@ import urllib.parse
 from logging.handlers import TimedRotatingFileHandler
 
 import akshare as ak
+import requests
 from fastapi import APIRouter
 from fastapi import Depends, status
 from fastapi import Request
@@ -77,6 +78,13 @@ def root(
                     content={"error": "该接口返回数据为空，请确认参数是否正确：https://akshare.akfamily.xyz"},
                 )
             temp_df = received_df.to_json(orient="records", date_format="iso")
+        except requests.exceptions.ProxyError:
+            return JSONResponse(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                content={
+                    "error": "网络代理导致请求失败。已建议禁用系统代理，请重试或检查网络设置。",
+                },
+            )
         except KeyError as e:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -169,6 +177,14 @@ def root(request: Request, item_id: str):
                     content={"error": "该接口返回数据为空，请确认参数是否正确：https://akshare.akfamily.xyz"},
                 )
             temp_df = received_df.to_json(orient="records", date_format="iso")
+        except requests.exceptions.ProxyError:
+            logger.info("网络代理导致请求失败。已建议禁用系统代理，请重试或检查网络设置。")
+            return JSONResponse(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                content={
+                    "error": "网络代理导致请求失败。已建议禁用系统代理，请重试或检查网络设置。",
+                },
+            )
         except KeyError as e:
             logger.info(
                 f"请输入正确的参数错误 {e}，请升级 AKShare 到最新版本并在文档中确认该接口的使用方式：https://akshare.akfamily.xyz")
@@ -182,11 +198,21 @@ def root(request: Request, item_id: str):
         return JSONResponse(status_code=status.HTTP_200_OK, content=json.loads(temp_df))
 
 
-def generate_html_response():
-    file_path = get_pyscript_html(file="akscript.html")
-    with open(file_path, encoding="utf8") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content, status_code=200)
+def generate_html_response(request: Request):
+    """
+    生成基于 Jinja2 的 HTML 响应，确保模板变量可用。
+    优先取查询参数中的 interface，否则使用一个默认的演示接口。
+    """
+    interface = request.query_params.get("interface", "stock_zh_a_hist")
+    ip_addr = request.headers.get("host", "localhost:8888")
+    return templates.TemplateResponse(
+        "akscript.html",
+        context={
+            "request": request,
+            "ip": ip_addr,
+            "interface": interface,
+        },
+    )
 
 
 short_path = get_template_path()
@@ -216,5 +242,6 @@ def akscript_temp(request: Request, interface: str):
     description="展示 PyScript",
     summary="该接口主要展示 PyScript 游览器运行 Python 代码",
 )
-def akscript():
-    return generate_html_response()
+def akscript(request: Request):
+    # 改为渲染模板，支持 query 参数 interface 与正确的 ip 变量
+    return generate_html_response(request)

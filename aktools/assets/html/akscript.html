@@ -1,7 +1,7 @@
 <html>
 <head>
-    <link rel="stylesheet" href="https://pyscript.net/alpha/pyscript.css"/>
-    <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css"/>
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
     <py-env>
         - pandas
     </py-env>
@@ -31,7 +31,7 @@
 
 <body>
 <py-title>利用 PyScript 在游览器运行 AKShare 实现数据展示及下载功能</py-title>
-<div id="download" align="center"><a href="http://{{ ip }}/api/public/{{ interface }}" download="{{interface}}.json">点击下载</a>
+<div id="download" align="center"><a id="downloadLink" href="#" download>点击下载</a>
 </div>
 <div id="table" align="center"></div>
 <py-script output="table">
@@ -48,5 +48,59 @@
     pyscript.write('table', temp_html)
 
 </py-script>
+<script>
+  (function() {
+    function renderTable(data) {
+      var container = document.getElementById('table');
+      if (!Array.isArray(data) || data.length === 0) {
+        container.innerHTML = '<p>暂无数据</p>';
+        return;
+      }
+      var columns = Object.keys(data[0] || {});
+      var html = '<table class="mystyle"><thead><tr>';
+      for (var i = 0; i < columns.length; i++) {
+        html += '<th>' + columns[i] + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+      for (var r = 0; r < data.length; r++) {
+        html += '<tr>';
+        for (var c = 0; c < columns.length; c++) {
+          var key = columns[c];
+          var val = data[r][key];
+          html += '<td>' + (val === undefined || val === null ? '' : val) + '</td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function jsFallback() {
+      var host = (location.host || '{{ ip }}').trim();
+      var iface = (new URLSearchParams(location.search).get('interface') || '{{ interface }}' || 'stock_zh_a_spot_em');
+      var url = 'http://' + host + '/api/public/' + iface;
+      var dl = document.getElementById('downloadLink');
+      if (dl) {
+        dl.href = url;
+        dl.setAttribute('download', iface + '.json');
+      }
+      fetch(url)
+        .then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(renderTable)
+        .catch(function(err) {
+          console.error('回退加载失败:', err);
+          document.getElementById('table').innerHTML = '<p style="color:red">数据加载失败：' + err + '</p>';
+        });
+    }
+
+    // 如果 PyScript 未加载或被拦截，启用纯 JS 回退渲染
+    if (!window.pyscript) {
+      jsFallback();
+    }
+  })();
+</script>
 </body>
 </html>
